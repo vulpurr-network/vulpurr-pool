@@ -193,6 +193,8 @@ typedef struct config_t
     int processes;
     int32_t cull_shares;
     uint32_t template_timeout;
+    bool proxy_protocol;
+    char clients_file[MAX_PATH];
 } config_t;
 
 typedef struct block_template_t
@@ -245,6 +247,7 @@ typedef struct client_t
     bool downstream;
     uint32_t downstream_accounts;
     uint64_t req_diff;
+    bool proxied;
     UT_hash_handle hh;
 } client_t;
 
@@ -1078,9 +1081,20 @@ static void
 update_pool_hr(void)
 {
     uint64_t hr = 0;
+    /* Vulpurr: hr_update() only runs on shares, so a client or branch that
+       stays connected but stops sending shares kept its last hashrate forever.
+       Decay every average here (called on each block header fetch). */
+    pthread_rwlock_rdlock(&rwlock_acc);
+    account_t *a = (account_t*)gbag_first(bag_accounts);
+    while ((a = gbag_next(bag_accounts, 0)))
+        hr_update(&a->hr_stats);
+    pthread_rwlock_unlock(&rwlock_acc);
     client_t *c = (client_t*)gbag_first(bag_clients);
     while ((c = gbag_next(bag_clients, 0)))
+    {
+        hr_update(&c->hr_stats);
         hr += (uint64_t) c->hr_stats.avg[0];
+    }
     log_debug("Pool hashrate: %"PRIu64, hr);
     if (upstream_event)
         return;
@@ -2853,8 +2867,41 @@ bail:
 }
 
 static void
+clients_dump(void)
+{
+    /* Vulpurr: real addresses of connected miners, for the pool map */
+    if (!*config.clients_file)
+        return;
+    char tmp[MAX_PATH+8];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", config.clients_file);
+    FILE *f = fopen(tmp, "w");
+    if (!f)
+        return;
+    client_t *c = NULL, *t = NULL;
+    pthread_rwlock_rdlock(&rwlock_cfd);
+    HASH_ITER(hh, clients_by_fd, c, t)
+    {
+        if (c->downstream || !*c->address)
+            continue;
+        /* host, address, rig name (password or rigid), hashrate 2m/10m/1h/1d, connected since */
+        char rig[64] = {0};
+        strncpy(rig, *c->rig_id ? c->rig_id : c->worker_id, sizeof(rig)-1);
+        for (char *r = rig; *r; r++)
+            if (*r == '\t' || *r == '\n' || *r == '\r')
+                *r = ' ';
+        fprintf(f, "%s\t%s\t%s\t%.0f\t%.0f\t%.0f\t%.0f\t%ld\n", c->host, c->address, rig,
+                c->hr_stats.avg[0], c->hr_stats.avg[1], c->hr_stats.avg[3],
+                c->hr_stats.avg[4], (long)c->connected_since);
+    }
+    pthread_rwlock_unlock(&rwlock_cfd);
+    fclose(f);
+    rename(tmp, config.clients_file);
+}
+
+static void
 timer_on_template(int fd, short kind, void *ctx)
 {
+    clients_dump();
     struct timeval timeout = {config.template_timeout, 0};
     time_t now = time(NULL);
     time_t offset = difftime(now, template_triggered);
@@ -3632,6 +3679,37 @@ miner_on_read(struct bufferevent *bev, void *ctx)
 
     while ((line = evbuffer_readln(input, &n, EVBUFFER_EOL_LF)))
     {
+        /* Vulpurr: miners come through nginx (TLS + plain on 3333/443), which
+           prepends a PROXY v1 line with the real client address. */
+        if (config.proxy_protocol && !client->proxied)
+        {
+            client->proxied = true;
+            if (strncmp(line, "PROXY ", 6) != 0)
+            {
+                log_warn("[%s:%d] Removing client. Missing PROXY header.",
+                        client->host, client->port);
+                free(line);
+                evbuffer_drain(input, len);
+                client_clear(bev);
+                goto unlock;
+            }
+            char *save = NULL;
+            strtok_r(line, " \r", &save);
+            char *proto = strtok_r(NULL, " \r", &save);
+            char *src = strtok_r(NULL, " \r", &save);
+            strtok_r(NULL, " \r", &save);
+            char *sport = strtok_r(NULL, " \r", &save);
+            if (proto && src && sport && strncmp(proto, "TCP", 3) == 0)
+            {
+                strncpy(client->host, src, MAX_HOST-1);
+                client->host[MAX_HOST-1] = 0;
+                client->port = atoi(sport);
+            }
+            log_info("Miner [%s:%d] connected via proxy",
+                    client->host, client->port);
+            free(line);
+            continue;
+        }
         json_object *message = json_tokener_parse(line);
         if (!message)
         {
@@ -4113,6 +4191,14 @@ read_config(const char *config_file)
         else if (strcmp(key, "cull-shares") == 0)
         {
             config.cull_shares = atoi(val);
+        }
+        else if (strcmp(key, "proxy-protocol") == 0)
+        {
+            config.proxy_protocol = atoi(val);
+        }
+        else if (strcmp(key, "clients-file") == 0)
+        {
+            strncpy(config.clients_file, val, sizeof(config.clients_file)-1);
         }
         else if (strcmp(key, "trusted-listen") == 0)
         {

@@ -1,99 +1,91 @@
 <!doctype html>
-<html>
-    <head>
-        <title>monero-pool</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body {
-                font-family: "Courier New", Courier, monospace;
-            }
-            header {
-                font-size: larger;
-                font-weight: bold;
-                padding-bottom: 1em;
-            }
-            table {
-                padding-bottom: 1em;
-            }
-            td {
-                vertical-align: top;
-                white-space: nowrap;
-            }
-            td:last-child {
-                white-space: unset;
-            }
-            .miner {
-                display: none;
-            }
-            #address {
-                min-width: 10ch;
-                max-width: 10ch;
-                overflow: hidden;
-                border-bottom: 1px dashed black;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                word-wrap: unset;
-            }
-            #address:focus {
-                outline: 0px solid transparent;
-                text-overflow: initial;
-                white-space: initial;
-                word-wrap: break-word;
-            }
-        </style>
-    </head>
-    <body>
-        <header>Monero Mining Pool</header>
-        <table>
-            <tr><td>Pool HR: </td><td id="pool_hashrate"></td></tr>
-            <tr><td>Network HR: </td><td id="network_hashrate"></td></tr>
-            <tr><td>Network height: </td><td id="network_height"></td></tr>
-            <tr><td>Blocks found: </td><td id="pool_blocks_found"></td></tr>
-            <tr><td>Last block found: </td><td id="last_block_found"></td></tr>
-            <tr><td>Last template: </td><td id="last_template_fetched"></td></tr>
-            <tr><td>Round HR: </td><td id="round_hashrate"></td></tr>
-            <tr><td>Round hashes: </td><td id="round_hashes"></td></tr>
-            <tr><td>Payment threshold: </td><td id="payment_threshold"></td></tr>
-            <tr><td>Pool fee: </td><td id="pool_fee"></td></tr>
-            <tr><td>Pool port: </td><td id="pool_port"></td></tr>
-            <tr><td>Pool SSL port: </td><td id="pool_ssl_port"></td></tr>
-            <tr><td>Allow self-select: </td><td id="allow_self_select"></td></tr>
-            <tr><td>Miners connected: </td><td id="connected_miners"></td></tr>
-            <tr class="miner"><td>Your HR: </td><td id="miner_hashrate"></td></tr>
-            <tr class="miner"><td>Balance due: </td><td id="miner_balance"></td></tr>
-            <tr><td>Miner address: </td><td id="address" contenteditable="true"></td></tr>
-        </table>
-        <small><a href="https://github.com/jtgrassie/monero-pool">https://github.com/jtgrassie/monero-pool</a></small>
-        <script>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Пул Vulpurr (VUP)</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #15121a; color: #ece6f2; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 22px; }
+  .head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .head img { width: 56px; height: 56px; }
+  h1 { font-size: 32px; margin: 0; }
+  .tag { color: #f08a3c; font-weight: 600; margin-bottom: 22px; }
+  .card { background: #1f1a26; border: 1px solid #2e2738; border-radius: 14px; padding: 16px 20px; margin-top: 18px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 6px 0; vertical-align: top; color: #c9c0d3; }
+  td:last-child { text-align: right; color: #ece6f2; font-variant-numeric: tabular-nums; word-break: break-all; }
+  .miner { display: none; }
+  #address { min-width: 12ch; border-bottom: 1px dashed #f08a3c; outline: none; color: #ffd2ad; text-align: left; }
+  code { background: #2a2333; padding: 2px 6px; border-radius: 6px; color: #ffd2ad; word-break: break-all; }
+  pre { background: #2a2333; padding: 12px; border-radius: 10px; color: #ffd2ad; white-space: pre-wrap; word-break: break-all; }
+  a { color: #f08a3c; }
+  small { color: #7d728a; }
+</style>
+</head>
+<body>
+<main>
+  <div class="head"><img src="/logo.svg" alt=""><h1>Пул Vulpurr</h1></div>
+  <div class="tag">Комиссия <span id="pool_fee"></span> · выплаты от <span id="payment_threshold"></span> VUP</div>
+
+  <div class="card"><table>
+    <tr><td>Хешрейт пула</td><td id="pool_hashrate"></td></tr>
+    <tr><td>Хешрейт сети</td><td id="network_hashrate"></td></tr>
+    <tr><td>Высота сети</td><td id="network_height"></td></tr>
+    <tr><td>Найдено блоков</td><td id="pool_blocks_found"></td></tr>
+    <tr><td>Последний блок</td><td id="last_block_found"></td></tr>
+    <tr><td>Хешрейт раунда</td><td id="round_hashrate"></td></tr>
+    <tr><td>Прогресс раунда</td><td id="round_hashes"></td></tr>
+    <tr><td>Майнеров онлайн</td><td id="connected_miners"></td></tr>
+    <tr><td>Последний шаблон</td><td id="last_template_fetched"></td></tr>
+  </table></div>
+
+  <div class="card"><table>
+    <tr><td>Твой адрес (нажми и вставь)</td><td id="address" contenteditable="true"></td></tr>
+    <tr class="miner"><td>Твой хешрейт</td><td id="miner_hashrate"></td></tr>
+    <tr class="miner"><td>К выплате</td><td id="miner_balance"></td></tr>
+  </table></div>
+
+  <div class="card">
+    <b>Как подключиться</b>
+    <p>Адрес пула: <code>vulpurr.com:<span id="pool_port"></span></code><span style="display:none" id="pool_ssl_port"></span>. Логин — твой адрес Vulpurr (начинается на <code>Vu</code>), пароль любой.</p>
+    <pre>xmrig -a rx/0 -o vulpurr.com:3333 -u ТВОЙ_АДРЕС_Vu... -p x</pre>
+    <p>Хочешь без комиссии — майни через P2Pool прямо в кошельке: Дополнительно → Майнинг → P2Pool.</p>
+  </div>
+  <p><small><a href="/">vulpurr.com</a> · пул на основе monero-pool <span id="allow_self_select" style="display:none"></span></small></p>
+</main>
+<script>
+
             function format_last_time(last)
             {
                 var now = new Date().getTime() / 1000;
                 var diff = now - last;
                 var v;
                 if (last == 0)
-                    return "None yet";
+                    return "ещё не было";
                 else if (diff <= 0)
-                    return "Just now";
+                    return "только что";
                 else if (diff < 60)
                 {
                     v = parseInt(diff);
-                    return v + " second" + (v != 1 ? "s" : "") + " ago";
+                    return v + " сек назад";
                 }
                 else if (diff < 3600)
                 {
                     v = parseInt(diff/60);
-                    return v + " minute" + (v != 1 ? "s" : "") + " ago";
+                    return v + " мин назад";
                 }
                 else if (diff < 86400)
                 {
                     v = parseInt(diff/3600);
-                    return v + " hour" + (v != 1 ? "s" : "") + " ago";
+                    return v + " ч назад";
                 }
                 else
                 {
                     v = parseInt(diff/86400);
-                    return v + " day" + (v != 1 ? "s" : "") + " ago";
+                    return v + " дн назад";
                 }
             }
 
@@ -185,7 +177,7 @@
                 var d = new Date();
                 d.setTime(d.getTime() + (86400 * 365 * 1000));
                 document.cookie = "wa=" + this.innerText +
-                    ";expires=" + d.toGMTString();
+                    ";path=/;expires=" + d.toGMTString();
                 window.location.reload();
                 return false;
             };
@@ -215,12 +207,12 @@
                 }
                 var get_stats = function()
                 {
-                    xhr.open("GET", "/stats");
+                    xhr.open("GET", "stats");
                     xhr.send(null);
                 };
                 setInterval(get_stats, 30000);
                 get_stats();
             };
         </script>
-    </body>
+</body>
 </html>
