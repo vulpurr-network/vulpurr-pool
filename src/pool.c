@@ -78,6 +78,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define CLIENT_JOBS_MAX 4
 #define BLOCK_HEADERS_MAX 4
 #define BLOCK_TEMPLATES_MAX 4
+/* Vulpurr: hand out a fresh template (new timestamp) at least this often, even
+   without new transactions, so block timestamps reflect when the block was found */
+#define TEMPLATE_REFRESH 30
 #define MAINNET_ADDRESS_PREFIX 18
 #define TESTNET_ADDRESS_PREFIX 53
 #define BLOCK_HEADERS_RANGE 10
@@ -210,6 +213,7 @@ typedef struct block_template_t
     char seed_hash[65];
     char next_seed_hash[65];
     uint64_t tx_count;
+    time_t fetched;
 } block_template_t;
 
 typedef struct job_t
@@ -1867,10 +1871,13 @@ rpc_on_block_template(const char* data, rpc_callback_t *callback)
 
     pool_stats.last_template_fetched = time(NULL);
     response_to_block_template(result, &cand);
+    cand.fetched = time(NULL);
 
     if ((top = bstack_top(bst)))
     {
-        if (cand.tx_count > top->tx_count || cand.height > top->height)
+        if (cand.tx_count > top->tx_count || cand.height > top->height
+                || (cand.height == top->height
+                    && difftime(cand.fetched, top->fetched) >= TEMPLATE_REFRESH))
         {
             log_trace("Using new template, height: %"PRIu64", txs: %"PRIu64,
                     cand.height, cand.tx_count);
